@@ -21,10 +21,11 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Supplier;
+
 import javax.annotation.Resource;
 import javax.inject.Provider;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import org.springframework.beans.factory.BeanClassLoaderAware;
 import org.springframework.beans.factory.BeanFactory;
@@ -45,6 +46,9 @@ import org.springframework.beans.factory.config.PropertyPlaceholderConfigurer;
 import org.springframework.beans.factory.parsing.BeanDefinitionParsingException;
 import org.springframework.beans.factory.support.DefaultListableBeanFactory;
 import org.springframework.beans.factory.support.RootBeanDefinition;
+import org.springframework.beans.testfixture.beans.ITestBean;
+import org.springframework.beans.testfixture.beans.NestedTestBean;
+import org.springframework.beans.testfixture.beans.TestBean;
 import org.springframework.context.ApplicationListener;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.AnnotationConfigUtils;
@@ -55,9 +59,6 @@ import org.springframework.context.annotation.Scope;
 import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.context.event.ContextRefreshedEvent;
 import org.springframework.context.support.GenericApplicationContext;
-import org.springframework.tests.sample.beans.ITestBean;
-import org.springframework.tests.sample.beans.NestedTestBean;
-import org.springframework.tests.sample.beans.TestBean;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
@@ -361,6 +362,7 @@ public class ConfigurationClassProcessingTests {
 
 		static TestBean testBean = new TestBean(ConfigWithBeanWithProviderImplementation.class.getSimpleName());
 
+		@Override
 		@Bean(name = "customName")
 		public TestBean get() {
 			return testBean;
@@ -373,6 +375,7 @@ public class ConfigurationClassProcessingTests {
 
 		static Set<String> set = Collections.singleton("value");
 
+		@Override
 		@Bean(name = "customName")
 		public Set<String> get() {
 			return set;

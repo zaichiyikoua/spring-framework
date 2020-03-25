@@ -17,6 +17,7 @@
 package org.springframework.messaging.rsocket;
 
 import java.lang.reflect.Field;
+import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -28,9 +29,10 @@ import io.rsocket.ConnectionSetupPayload;
 import io.rsocket.DuplexConnection;
 import io.rsocket.RSocketFactory;
 import io.rsocket.frame.decoder.PayloadDecoder;
+import io.rsocket.metadata.WellKnownMimeType;
 import io.rsocket.transport.ClientTransport;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.reactivestreams.Publisher;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -38,6 +40,7 @@ import reactor.core.publisher.Mono;
 import org.springframework.core.ResolvableType;
 import org.springframework.core.codec.Decoder;
 import org.springframework.core.codec.DecodingException;
+import org.springframework.core.codec.StringDecoder;
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.core.io.buffer.DataBufferFactory;
 import org.springframework.core.io.buffer.DefaultDataBufferFactory;
@@ -52,7 +55,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyZeroInteractions;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 /**
  * Unit tests for {@link DefaultRSocketRequesterBuilder}.
@@ -68,7 +71,7 @@ public class DefaultRSocketRequesterBuilderTests {
 	private final TestRSocketFactoryConfigurer rsocketFactoryConfigurer = new TestRSocketFactoryConfigurer();
 
 
-	@Before
+	@BeforeEach
 	public void setup() {
 		this.transport = mock(ClientTransport.class);
 		given(this.transport.connect(anyInt())).willReturn(Mono.just(this.connection));
@@ -84,7 +87,7 @@ public class DefaultRSocketRequesterBuilderTests {
 				.rsocketStrategies(strategiesConfigurer)
 				.connect(this.transport);
 
-		verifyZeroInteractions(this.transport);
+		verifyNoInteractions(this.transport);
 		assertThat(this.rsocketFactoryConfigurer.rsocketFactory()).isNull();
 	}
 
@@ -150,7 +153,7 @@ public class DefaultRSocketRequesterBuilderTests {
 	@Test
 	public void mimeTypesCannotBeChangedAtRSocketFactoryLevel() {
 		MimeType dataMimeType = MimeTypeUtils.APPLICATION_JSON;
-		MimeType metaMimeType = MetadataExtractor.ROUTING;
+		MimeType metaMimeType = MimeTypeUtils.parseMimeType(WellKnownMimeType.MESSAGE_RSOCKET_ROUTING.getString());
 
 		RSocketRequester requester = RSocketRequester.builder()
 				.metadataMimeType(metaMimeType)
@@ -188,6 +191,39 @@ public class DefaultRSocketRequesterBuilderTests {
 
 		assertThat(setupPayload.getMetadataUtf8()).isEqualTo("toA");
 		assertThat(setupPayload.getDataUtf8()).isEqualTo("My data");
+	}
+
+	@Test
+	public void setupWithAsyncValues() {
+
+		Mono<String> asyncMeta1 = Mono.delay(Duration.ofMillis(1)).map(aLong -> "Async Metadata 1");
+		Mono<String> asyncMeta2 = Mono.delay(Duration.ofMillis(1)).map(aLong -> "Async Metadata 2");
+		Mono<String> data = Mono.delay(Duration.ofMillis(1)).map(aLong -> "Async data");
+
+		RSocketRequester.builder()
+				.dataMimeType(MimeTypeUtils.TEXT_PLAIN)
+				.setupRoute("toA")
+				.setupMetadata(asyncMeta1, new MimeType("text", "x.test.metadata1"))
+				.setupMetadata(asyncMeta2, new MimeType("text", "x.test.metadata2"))
+				.setupData(data)
+				.connect(this.transport)
+				.block();
+
+		ConnectionSetupPayload payload = Mono.from(this.connection.sentFrames())
+				.map(ConnectionSetupPayload::create)
+				.block();
+
+		MimeType compositeMimeType =
+				MimeTypeUtils.parseMimeType(WellKnownMimeType.MESSAGE_RSOCKET_COMPOSITE_METADATA.getString());
+
+		DefaultMetadataExtractor extractor = new DefaultMetadataExtractor(StringDecoder.allMimeTypes());
+		extractor.metadataToExtract(new MimeType("text", "x.test.metadata1"), String.class, "asyncMeta1");
+		extractor.metadataToExtract(new MimeType("text", "x.test.metadata2"), String.class, "asyncMeta2");
+		Map<String, Object> metadataValues = extractor.extract(payload, compositeMimeType);
+
+		assertThat(metadataValues.get("asyncMeta1")).isEqualTo("Async Metadata 1");
+		assertThat(metadataValues.get("asyncMeta2")).isEqualTo("Async Metadata 2");
+		assertThat(payload.getDataUtf8()).isEqualTo("Async data");
 	}
 
 	@Test

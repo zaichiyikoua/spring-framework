@@ -362,9 +362,17 @@ public class DefaultStompSession implements ConnectionHandlingStompSession {
 
 	@Override
 	public void disconnect() {
+		disconnect(null);
+	}
+
+	@Override
+	public void disconnect(@Nullable StompHeaders headers) {
 		this.closing = true;
 		try {
 			StompHeaderAccessor accessor = createHeaderAccessor(StompCommand.DISCONNECT);
+			if (headers != null) {
+				accessor.addNativeHeaders(headers);
+			}
 			Message<byte[]> message = createMessage(accessor, EMPTY_PAYLOAD);
 			execute(message);
 		}
@@ -689,8 +697,10 @@ public class DefaultStompSession implements ConnectionHandlingStompSession {
 			if (conn != null) {
 				conn.send(HEARTBEAT).addCallback(
 						new ListenableFutureCallback<Void>() {
+							@Override
 							public void onSuccess(@Nullable Void result) {
 							}
+							@Override
 							public void onFailure(Throwable ex) {
 								handleFailure(ex);
 							}

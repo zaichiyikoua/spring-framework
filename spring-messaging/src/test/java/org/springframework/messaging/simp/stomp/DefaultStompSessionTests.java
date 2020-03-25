@@ -23,13 +23,13 @@ import java.util.Map;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.atomic.AtomicReference;
 
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageDeliveryException;
@@ -64,7 +64,7 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
  *
  * @author Rossen Stoyanchev
  */
-@RunWith(MockitoJUnitRunner.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 public class DefaultStompSessionTests {
 
 	private DefaultStompSession session;
@@ -82,7 +82,7 @@ public class DefaultStompSessionTests {
 	private ArgumentCaptor<Message<byte[]>> messageCaptor;
 
 
-	@Before
+	@BeforeEach
 	public void setUp() {
 		this.connectHeaders = new StompHeaders();
 		this.session = new DefaultStompSession(this.sessionHandler, this.connectHeaders);
@@ -655,6 +655,27 @@ public class DefaultStompSessionTests {
 		assertThat(this.session.isConnected()).isTrue();
 
 		this.session.disconnect();
+		assertThat(this.session.isConnected()).isFalse();
+		verifyNoMoreInteractions(this.sessionHandler);
+	}
+
+	@Test
+	public void disconnectWithHeaders() {
+		this.session.afterConnected(this.connection);
+		assertThat(this.session.isConnected()).isTrue();
+
+		StompHeaders headers = new StompHeaders();
+		headers.add("foo", "bar");
+
+		this.session.disconnect(headers);
+
+		Message<byte[]> message = this.messageCaptor.getValue();
+		StompHeaderAccessor accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
+		headers = StompHeaders.readOnlyStompHeaders(accessor.getNativeHeaders());
+		assertThat(headers.size()).as(headers.toString()).isEqualTo(1);
+		assertThat(headers.get("foo").size()).isEqualTo(1);
+		assertThat(headers.get("foo").get(0)).isEqualTo("bar");
+
 		assertThat(this.session.isConnected()).isFalse();
 		verifyNoMoreInteractions(this.sessionHandler);
 	}
